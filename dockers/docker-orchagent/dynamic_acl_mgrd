@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+
+import time
+import signal
+from swsscommon import swsscommon
+from sonic_py_common.logger import Logger 
+
+"""
+A script running as a daemon in swss container. It will do following check in loop
+1. Read expiration time from STATE_DB
+2. Remove corresponding ACL rule if the expiration expired
+"""
+
+SYSLOG_IDENTIFIER = 'dynamic_acl_mgrd'
+
+STATE_DB_ACL_TTL_TABLE_NAME = "ACL_TTL_TABLE"
+CONFIG_DB_ACL_TABLE_TABLE_NAME = "ACL_TABLE"
+CONFIG_DB_ACL_RULE_TABLE_NAME = "ACL_RULE"
+
+dynamic_acl_checker = None
+
+logger = Logger(SYSLOG_IDENTIFIER)
+logger.set_min_log_priority_info()
+
+class DynamicACLChecker(object):
+    
+    """
+    Worker for checking dynamic ACL rules
+    """
+    def __init__(self, state_db_connector, config_db_connector, interval_in_second=10):
+        self.state_db_connector = state_db_connector
+        self.config_db_connector = config_db_connector
+        self.interval_in_second = interval_in_second
+        self.working = False
+    
+    def get_expired_acl_rules(self):
+        """
+        Retrieve all expired ACL rules from STATE_DB
+        @return: A list
+        """
+        expired_entry_names = []
+        timenow = int(time.time())
+        try:
+            ttl_entry_names = self.state_db_connector.keys(self.state_db_connector.STATE_DB, STATE_DB_ACL_TTL_TABLE_NAME + r'|*')
+        except IndexError:
+            return []
+        for ttl_entry_name in ttl_entry_names:
+            try:
+                expiration_time = int(self.state_db_connector.get(self.state_db_connector.STATE_DB, ttl_entry_name, "expiration_time"))
+                if expiration_time <= timenow:
+                    expired_entry_names.append(ttl_entry_name)
+                    continue
+            except ValueError:
+                # Treat invalid value as expired, otherwise the rule will never be cleared
+                expired_entry_names.append(ttl_entry_name)
+                continue
+        
+        return expired_entry_names
+
+
+    def remove_expored_ttl_entries(self, expired_entry_names):
+        """
+        Remove expired TTL entries from STATE_DB
+        @return: None
+        """
+        for name in expired_entry_names:
+            self.state_db_connector.delete(self.state_db_connector.STATE_DB, name)
+            logger.log_info("Removed TTL entry {}".format(name))
+        
+
+    def remove_expired_acl_entries(self, expired_entry_names):
+        """
+        Remove expired ACL rules from CONFIG_DB
+        @return: None
+        """
+        splitor = self.state_db_connector.get_db_separator(self.state_db_connector.STATE_DB)
+        for name in expired_entry_names:
+            # ACL_TTL_TABLE|DATAACL|RULE_1
+            v = name.split(splitor)
+            if len(v) != 3:
+                logger.log_error("Invalid ACL_TTL_TABLE name {}".format(name))
+                continue
+            acl_table_name, acl_rule_name = v[1], v[2]
+            acl_rule_table_name = CONFIG_DB_ACL_RULE_TABLE_NAME + splitor + acl_table_name + splitor + acl_rule_name
+            try:
+                is_dynamic = self.config_db_connector.get(self.config_db_connector.CONFIG_DB, acl_rule_table_name, "is_dynamic")
+                if is_dynamic.lower() == 'true':
+                    self.config_db_connector.delete(self.config_db_connector.CONFIG_DB, acl_rule_table_name)
+                    logger.log_info("Removed dynamic ACL RULE {}".format(acl_rule_table_name))
+            except IndexError:
+                # Ignore unexisting rules
+                continue
+
+
+    def start_working(self):
+        """
+        Main loop for checking TTL and remove expired ACL rules
+        """
+        self.working = True
+        logger.log_notice("Dynamic ACL manager starts working")
+        while self.working:
+            expired_entry_names = self.get_expired_acl_rules()
+            self.remove_expired_acl_entries(expired_entry_names)
+            # Remove state_db entries after config_db entries to avoid dangling dynamic ACL rules
+            self.remove_expored_ttl_entries(expired_entry_names)
+            if not self.working:
+                logger.log_info("Dynamic ACL manager quit")
+                break
+            time.sleep(self.interval_in_second)
+
+
+    def stop_working(self):
+        """
+        Stop main loop.
+        """
+        self.working = False
+        logger.log_notice("Dynamic ACL manager is going to quit")
+
+
+def sig_term_handler(signal, frame):
+    """
+    A signal handler to ensure the working is shutdown gracefully
+    """
+    global dynamic_acl_checker
+    if dynamic_acl_checker:
+        dynamic_acl_checker.stop_working()
+
+
+def main():
+    signal.signal(signal.SIGTERM, sig_term_handler)
+
+    config_db_connector = swsscommon.SonicV2Connector()
+    config_db_connector.connect(config_db_connector.CONFIG_DB)
+    state_db_connector = swsscommon.SonicV2Connector()
+    state_db_connector.connect(state_db_connector.STATE_DB)
+    
+    # Start working
+    global dynamic_acl_checker
+    dynamic_acl_checker = DynamicACLChecker(state_db_connector, config_db_connector)
+    dynamic_acl_checker.start_working()
+    
+
+if __name__ == "__main__":
+    main()
+

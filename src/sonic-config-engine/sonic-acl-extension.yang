@@ -81,11 +81,37 @@ module sonic-acl-extension {
     }
   }
 
+  grouping ttl-config {
+    description
+      "The TTL (Time To Live, in second) for an entry.";
+
+    leaf ttl {
+      type uint32;
+      description
+        "TTL(in second).";
+    }
+  }
+
+  grouping dynamic-acl-fields-top {
+    description
+      "Configuration for dynamic ACL.";
+
+    container dynamic-acl {
+      container config {
+        uses ttl-config;
+      }
+    }
+  }
+
   augment "/oc-acl:acl/oc-acl:acl-sets/oc-acl:acl-set/oc-acl:acl-entries/oc-acl:acl-entry/oc-acl:l2/oc-acl:config" {
     uses extended-l2-match;
   }
 
   augment "/oc-acl:acl/oc-acl:acl-sets/oc-acl:acl-set/oc-acl:acl-entries/oc-acl:acl-entry" {
     uses icmp-protocol-fields-top;
+  }
+
+  augment "/oc-acl:acl/oc-acl:acl-sets/oc-acl:acl-set/oc-acl:acl-entries/oc-acl:acl-entry" {
+    uses dynamic-acl-fields-top;
   }
 }

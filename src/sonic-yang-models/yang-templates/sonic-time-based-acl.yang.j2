@@ -45,11 +45,11 @@ module sonic-acl {
 
 	container sonic-acl {
 
-		container ACL_RULE {
+		container DYNAMIC_ACL_RULE {
 
-			description "ACL_RULE part of config_db.json";
+			description "DYNAMIC_ACL_RULE part of config_db.json";
 
-			list ACL_RULE_LIST {
+			list DYNAMIC_ACL_RULE_LIST {
 
 				key "ACL_TABLE_NAME RULE_NAME";
 
@@ -268,104 +268,28 @@ module sonic-acl {
 						range "0..1";
 					}
 				}
-			}
-			/* end of ACL_RULE_LIST */
-		}
-		/* end of container ACL_RULE */
 
-		container ACL_TABLE_TYPE {
-			list ACL_TABLE_TYPE_LIST {
-				key "ACL_TABLE_TYPE_NAME";
-
-				leaf ACL_TABLE_TYPE_NAME {
-					type string;
+				leaf is_dynamic {
+					type boolean;
 				}
 
-				leaf-list matches {
-					type string;
-					min-elements 1;
-				}
-
-				leaf-list actions {
-					type string;
-					default "";
-				}
-
-				leaf-list bind_points {
-					type enumeration {
-						enum PORT;
-						enum LAG;
+				leaf ttl {
+					type uint16 {
+						range 0..86400;
 					}
-					min-elements 1;
+				}
+
+				leaf creation_time {
+					type uint64;
+				}
+
+				leaf expiration_time {
+					type uint64;
 				}
 			}
+			/* end of DYNAMIC_ACL_RULE_LIST */
 		}
-
-		container ACL_TABLE {
-
-			description "ACL_TABLE part of config_db.json";
-
-			list ACL_TABLE_LIST {
-
-				key "ACL_TABLE_NAME";
-
-				leaf ACL_TABLE_NAME {
-					type string;
-				}
-
-				leaf policy_desc {
-					type string {
-						length 1..255;
-					}
-				}
-
-				leaf type {
-					mandatory true;
-					type union {
-						type leafref {
-							path "/acl:sonic-acl/acl:ACL_TABLE_TYPE/acl:ACL_TABLE_TYPE_LIST/acl:ACL_TABLE_TYPE_NAME";
-						}
-						type stypes:acl_table_type;
-					}
-				}
-
-				leaf stage {
-					type string {
-						pattern "ingress|egress|INGRESS|EGRESS";
-					}
-					default "INGRESS";
-				}
-
-				leaf-list services {
-					type string;
-				}
-
-				/* Validating 'services' exist if ACL type is 'CTRLPLANE' */
-				must "(not(type = 'CTRLPLANE')) or (boolean(services))";
-
-				leaf-list ports {
-					/* union of leafref is allowed in YANG 1.1 */
-					type union {
-						type leafref {
-							path /port:sonic-port/port:PORT/port:PORT_LIST/port:name;
-						}
-						type leafref {
-							path /lag:sonic-portchannel/lag:PORTCHANNEL/lag:PORTCHANNEL_LIST/lag:name;
-						}
-						type string {
-							pattern "";
-						}
-					}
-					/* Today in SONiC, we do not delete the list once
-					 * created, instead we set to empty list. Due to that
-					 * below default values are needed.
-					 */
-					default "";
-				}
-			}
-			/* end of ACL_TABLE_LIST */
-		}
-        /* end of container ACL_TABLE */
+		/* end of container DYNAMIC_ACL_RULE */
 	}
     /* end of container sonic-acl */
 }

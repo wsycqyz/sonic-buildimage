@@ -13,7 +13,7 @@ A script running as a daemon in swss container. It will do following check in lo
 
 SYSLOG_IDENTIFIER = 'dynamic_acl_mgrd'
 
-DYNAMIC_ACL_RULE_TABLE = "DYNAMIC_ACL_RULE_TABLE"
+DYNAMIC_ACL_RULE_TABLE = "DYNAMIC_ACL_RULE"
 APP_ACL_RULE_TABLE_NAME = "ACL_RULE_TABLE"
 
 dynamic_acl_checker = None

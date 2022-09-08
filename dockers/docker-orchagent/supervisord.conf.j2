@@ -291,8 +291,8 @@ environment=ASAN_OPTIONS="log_path=/var/log/asan/fdbsyncd-asan.log{{ asan_extra_
 
 {% if DEVICE_METADATA.localhost.type %}
 {% if DEVICE_METADATA.localhost.type == "BmcMgmtToRRouter" %}
-[program:dynamic_acl_mgrd]
-command=/usr/bin/dynamic_acl_mgrd
+[program:time_based_acl_mgrd]
+command=/usr/bin/time_based_acl_mgrd
 priority=18
 autostart=false
 autorestart=unexpected

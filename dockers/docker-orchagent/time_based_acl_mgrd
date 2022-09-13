@@ -41,12 +41,10 @@ class DynamicACLChecker(object):
         """
         expired_entry_names = []
         timenow = int(time.time())
-        try:
-            # TIME_BASED_ACL_RULE|TEST1|TIME_BASED_RULE_1
-            entry_names = self.config_db_connector.keys(self.config_db_connector.CONFIG_DB, TIME_BASED_ACL_RULE_TABLE + r'|*')
-        except ValueError:
-            logger.log_info("Return NULL expired entry names due to error from config db")
-            return []
+
+        # TIME_BASED_ACL_RULE|TEST1|TIME_BASED_RULE_1
+        entry_names = self.config_db_connector.keys(self.config_db_connector.CONFIG_DB, TIME_BASED_ACL_RULE_TABLE + r'|*')
+
         for entry_name in entry_names:
             try:
                 expiration_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, entry_name, "expiration_time"))
@@ -71,12 +69,8 @@ class DynamicACLChecker(object):
             self.config_db_connector.delete(self.config_db_connector.CONFIG_DB, entry_name)
             logger.log_info("Removed time-based ACL rule entry from CONFIG_DB: {}".format(entry_name))
 
-        try:
-            app_db_entry_names = self.app_db_connector.keys(self.app_db_connector.APPL_DB, APP_ACL_RULE_TABLE_NAME + r':*:TIME_BASED_RULE_*')
-            config_db_entry_names = self.config_db_connector.keys(self.config_db_connector.CONFIG_DB, TIME_BASED_ACL_RULE_TABLE + r'|*')
-        except ValueError:
-            logger.log_info("Cannot remove any acl entry due to error from config db")
-            return
+        app_db_entry_names = self.app_db_connector.keys(self.app_db_connector.APPL_DB, APP_ACL_RULE_TABLE_NAME + r':*:TIME_BASED_RULE_*')
+        config_db_entry_names = self.config_db_connector.keys(self.config_db_connector.CONFIG_DB, TIME_BASED_ACL_RULE_TABLE + r'|*')
 
         for app_db_entry_name in app_db_entry_names:
             # ACL_RULE_TABLE:TEST1:TIME_BASED_RULE_1
@@ -87,14 +81,11 @@ class DynamicACLChecker(object):
             acl_table_name, acl_rule_name = v[1], v[2]
             acl_rule_table_name = acl_table_name + "|" + acl_rule_name
             config_db_entry_name = TIME_BASED_ACL_RULE_TABLE + "|" + acl_rule_table_name
+            
             if config_db_entry_name not in config_db_entry_names:
-                try:
-                    ps = swsscommon.ProducerStateTable(self.app_db, APP_ACL_RULE_TABLE_NAME)
-                    ps._del(acl_table_name + ":" + acl_rule_name)
-                    logger.log_info("Removed time-based ACL rule entry from APPL_DB: {}".format(app_db_entry_name))
-                except ValueError:
-                    # Ignore unexisting rules
-                    continue
+                ps = swsscommon.ProducerStateTable(self.app_db, APP_ACL_RULE_TABLE_NAME)
+                ps._del(acl_table_name + ":" + acl_rule_name)
+                logger.log_info("Removed time-based ACL rule entry from APPL_DB: {}".format(app_db_entry_name))
 
 
     def get_new_acl_rules(self):
@@ -104,12 +95,9 @@ class DynamicACLChecker(object):
         '''
         new_entry_names = []
         timenow = int(time.time())
-        try:
-            config_db_entry_names = self.config_db_connector.keys(self.config_db_connector.CONFIG_DB, TIME_BASED_ACL_RULE_TABLE + r'|*')
-            app_db_entry_names = self.app_db_connector.keys(self.app_db_connector.APPL_DB, APP_ACL_RULE_TABLE_NAME + r':*:TIME_BASED_RULE_*')
-        except ValueError:
-            logger.log_info("Return NULL new entry names because of error from db")
-            return []
+
+        config_db_entry_names = self.config_db_connector.keys(self.config_db_connector.CONFIG_DB, TIME_BASED_ACL_RULE_TABLE + r'|*')
+        app_db_entry_names = self.app_db_connector.keys(self.app_db_connector.APPL_DB, APP_ACL_RULE_TABLE_NAME + r':*:TIME_BASED_RULE_*')
 
         for config_db_entry_name in config_db_entry_names:
             v = config_db_entry_name.split("|")
@@ -119,13 +107,10 @@ class DynamicACLChecker(object):
             acl_table_name, acl_rule_name = v[1], v[2]
             acl_rule_table_name = acl_table_name + ":" + acl_rule_name
             app_db_entry_name = APP_ACL_RULE_TABLE_NAME + ":" + acl_rule_table_name
+
             if app_db_entry_name not in app_db_entry_names:
-                try:
-                    expiration_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, config_db_entry_name, "expiration_time"))
-                    creation_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, config_db_entry_name, "creation_time"))
-                except ValueError:
-                    # Skip entry with invalid value
-                    continue
+                expiration_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, config_db_entry_name, "expiration_time"))
+                creation_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, config_db_entry_name, "creation_time"))
                 if timenow <= expiration_time and timenow >= creation_time:
                     new_entry_names.append(config_db_entry_name)
         #logger.log_info("Get new ACL rule entry names: {}".format(new_entry_names))
@@ -145,21 +130,16 @@ class DynamicACLChecker(object):
                 continue
             acl_table_name, acl_rule_name = v[1], v[2]
             acl_rule_table_name = acl_table_name + ":" + acl_rule_name
-            try:
-                new_entry = self.config_db_connector.get_all(self.config_db_connector.CONFIG_DB, new_entry_name)
-                del new_entry['creation_time']
-                del new_entry['expiration_time']
-                del new_entry['is_dynamic']
-                del new_entry['ttl']
 
-                ps = swsscommon.ProducerStateTable(self.app_db, APP_ACL_RULE_TABLE_NAME)
-                fvs = swsscommon.FieldValuePairs(list(new_entry.items()))
-                ps.set(acl_rule_table_name, fvs)
-                logger.log_info("Add time-based ACL RULE to APPL_DB: {}".format(APP_ACL_RULE_TABLE_NAME + ":" + acl_rule_table_name))
-                logger.log_info(str(new_entry))
-            except ValueError:
-                # Ignore unexisting rules
-                continue
+            new_entry = self.config_db_connector.get_all(self.config_db_connector.CONFIG_DB, new_entry_name)
+            new_entry.pop('creation_time', None)
+            new_entry.pop('expiration_time', None)
+
+            ps = swsscommon.ProducerStateTable(self.app_db, APP_ACL_RULE_TABLE_NAME)
+            fvs = swsscommon.FieldValuePairs(list(new_entry.items()))
+            ps.set(acl_rule_table_name, fvs)
+            logger.log_info("Add time-based ACL RULE to APPL_DB: {}".format(APP_ACL_RULE_TABLE_NAME + ":" + acl_rule_table_name))
+            logger.log_info(str(new_entry))
 
 
     def start_working(self):

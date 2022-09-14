@@ -81,24 +81,30 @@ module sonic-acl-extension {
     }
   }
 
-  grouping ttl-config {
+  grouping timestamp-config {
     description
-      "The TTL (Time To Live, in second) for an entry.";
+      "The start and end timestamp for an entry.";
 
-    leaf ttl {
+    leaf start_time {
       type uint32;
       description
-        "TTL(in second).";
+        "start timestamp";
+    }
+
+    leaf end_time {
+      type uint32;
+      description
+        "end timestamp";
     }
   }
 
-  grouping dynamic-acl-fields-top {
+  grouping time-based-acl-fields-top {
     description
-      "Configuration for dynamic ACL.";
+      "Configuration for time-based ACL.";
 
-    container dynamic-acl {
+    container time-range {
       container config {
-        uses ttl-config;
+        uses timestamp-config;
       }
     }
   }
@@ -112,6 +118,6 @@ module sonic-acl-extension {
   }
 
   augment "/oc-acl:acl/oc-acl:acl-sets/oc-acl:acl-set/oc-acl:acl-entries/oc-acl:acl-entry" {
-    uses dynamic-acl-fields-top;
+    uses time-based-acl-fields-top;
   }
 }

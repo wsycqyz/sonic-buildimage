@@ -127,7 +127,7 @@ class DynamicACLChecker(object):
             ps = swsscommon.ProducerStateTable(self.app_db, APP_ACL_RULE_TABLE_NAME)
             fvs = swsscommon.FieldValuePairs(list(new_entry.items()))
             ps.set(acl_rule_entry_key, fvs)
-            logger.log_info("Add time-based ACL RULE to APPL_DB: {}".format(APP_ACL_RULE_TABLE_NAME + ":" + acl_rule_entry_key))
+            logger.log_info("Added time-based ACL RULE to APPL_DB: {}".format(acl_rule_entry_key))
             logger.log_info(str(new_entry))
 
 

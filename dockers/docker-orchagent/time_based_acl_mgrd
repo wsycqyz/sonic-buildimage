@@ -7,8 +7,9 @@ from sonic_py_common.logger import Logger
 
 """
 A script running as a daemon in swss container. It will do following check in loop
-1. Read expiration time from STATE_DB
-2. Remove corresponding ACL rule if the expiration expired
+1. Read end_time from CONFIG_DB
+2. Remove corresponding ACL rule both from CONFIG_DB and APP_DB if it expired
+3. Add new ACL rule from CONFIG_DB to APP_DB
 """
 
 SYSLOG_IDENTIFIER = 'time_based_acl_mgrd'
@@ -47,8 +48,8 @@ class DynamicACLChecker(object):
 
         for entry_name in entry_names:
             try:
-                expiration_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, entry_name, "expiration_time"))
-                if expiration_time <= timenow:
+                end_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, entry_name, "end_time"))
+                if end_time <= timenow:
                     expired_entry_names.append(entry_name)
                     continue
             except ValueError:
@@ -109,9 +110,9 @@ class DynamicACLChecker(object):
             app_db_entry_name = APP_ACL_RULE_TABLE_NAME + ":" + acl_rule_table_name
 
             if app_db_entry_name not in app_db_entry_names:
-                expiration_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, config_db_entry_name, "expiration_time"))
-                creation_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, config_db_entry_name, "creation_time"))
-                if timenow <= expiration_time and timenow >= creation_time:
+                end_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, config_db_entry_name, "end_time"))
+                start_time = int(self.config_db_connector.get(self.config_db_connector.CONFIG_DB, config_db_entry_name, "start_time"))
+                if timenow <= end_time and timenow >= start_time:
                     new_entry_names.append(config_db_entry_name)
         #logger.log_info("Get new ACL rule entry names: {}".format(new_entry_names))
         return new_entry_names
@@ -132,8 +133,8 @@ class DynamicACLChecker(object):
             acl_rule_table_name = acl_table_name + ":" + acl_rule_name
 
             new_entry = self.config_db_connector.get_all(self.config_db_connector.CONFIG_DB, new_entry_name)
-            new_entry.pop('creation_time', None)
-            new_entry.pop('expiration_time', None)
+            new_entry.pop('start_time', None)
+            new_entry.pop('end_time', None)
 
             ps = swsscommon.ProducerStateTable(self.app_db, APP_ACL_RULE_TABLE_NAME)
             fvs = swsscommon.FieldValuePairs(list(new_entry.items()))

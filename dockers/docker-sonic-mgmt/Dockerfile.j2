@@ -185,7 +185,8 @@ ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 PYTHONIOENCODING=UTF-8
 RUN python3 -m pip install --upgrade pip setuptools wheel
 RUN python3 -m pip install aiohttp \
                            allure-pytest==2.8.22 \
-                           ansible==2.9.27 \
+                           ansible==6.5.0 \
+                           ansible-core==2.13.5 \
                            azure-storage-blob==12.9.0 \
                            azure-kusto-data \
                            azure-kusto-ingest \
@@ -201,7 +202,7 @@ RUN python3 -m pip install aiohttp \
                            ipython==5.4.1 \
                            ixnetwork-restpy==1.0.64 \
                            ixnetwork-open-traffic-generator==0.0.79 \
-                           jinja2==2.7.2 \
+                           jinja2 \
                            jsonpatch \
                            lxml \
                            markupsafe==2.0.1 \
@@ -224,7 +225,6 @@ RUN python3 -m pip install aiohttp \
                            pyro4 \
                            pysnmp==4.4.12 \
                            pysubnettree \
-                           pytest-ansible \
                            pytest-html \
                            pytest-repeat \
                            pytest-xdist==1.28.0 \
@@ -242,6 +242,11 @@ RUN python3 -m pip install aiohttp \
                            textfsm==1.1.2 \
                            thrift==0.11.0 \
                            virtualenv
+
+RUN git clone https://github.com/ansible-community/pytest-ansible.git \
+    && cd pytest-ansible \
+    && git checkout 052d5a27ba61308385ed4e361cf91756ed9e8d93 \
+    && sudo python3 setup.py install
 
 # Deactivating a virtualenv
 ENV PATH="$BACKUP_OF_PATH"

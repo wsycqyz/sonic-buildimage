@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+
+import time
+import signal
+from swsscommon import swsscommon
+from sonic_py_common.logger import Logger 
+
+SYSLOG_IDENTIFIER = 'time_based_acl_mgrd'
+APP_ACL_RULE_TABLE_NAME = "ACL_RULE_TABLE"
+
+time_based_acl_checker = None
+
+logger = Logger(SYSLOG_IDENTIFIER)
+logger.set_min_log_priority_info()
+
+class TimeBasedACLChecker(object):
+    """
+    Class which subscribes notification of changes in ACL rule table of APP DB.
+    The state machine of an ACL rule is:
+    |Active| - 180s by default -> |Active but pending removal| - 180s by default -> |Removed|
+        |                                                              |
+        \<-------------------------------------------------------------/
+                             SET op
+    """
+    
+    
+    def __init__(self, interval_in_second=180):
+        # Open a handle to the Application database
+        self.appl_db = swsscommon.DBConnector("APPL_DB", 0, False)
+        
+        # By default, the program will check ACL rule every 180s
+        self.interval_in_second = interval_in_second
+        self.acl_rule = {}
+
+
+    def start_working(self):
+        """
+        Main loop for checking ACL rules
+        """
+        self.working = True
+        logger.log_info("Time-based ACL manager starts working")
+
+        # Set select timeout to 5 seconds
+        SELECT_TIMEOUT_MS = 1000 * 5
+
+        # Subscribe to ACL Rule table notifications in the App DB
+        sel = swsscommon.Select()
+        sst_appdb = swsscommon.SubscriberStateTable(self.appl_db, APP_ACL_RULE_TABLE_NAME)
+        sel.addSelectable(sst_appdb)
+
+        last_flush = int(time.time())
+
+        while self.working:
+            (state, selectableObj) = sel.select(SELECT_TIMEOUT_MS)
+
+            if state == swsscommon.Select.OBJECT:
+                if selectableObj.getFd() == sst_appdb.getFd():
+                    (key, op, fvp) = sst_appdb.pop()
+                    if op == 'SET':
+                        self.process_acl_rule_table_event(key, op, fvp)
+                else:
+                    self.log_error("Got unexpected selectable object")
+
+            # By default, 
+            if int(time.time()) - last_flush > self.interval_in_second:
+                self.process_acl_rule_flush()
+                last_flush = int(time.time())
+
+
+    def process_acl_rule_table_event(self, key, op, fvp):
+        """
+        Process APP DB ACL rule table SET op event
+        """
+        logger.log_info('Process APP DB ACL rule table event: {} {} {}'.format(key,op,fvp))
+
+        # 1 = Active, 0 = Pending removal
+        self.acl_rule[key] = 1
+
+
+    def process_acl_rule_flush(self):
+        """
+        Flush APP DB "pending removal" ACL rules
+        Change "active" ACL rules to "pending removal" status.
+        """
+        for key in list(self.acl_rule):
+            if self.acl_rule[key] == 0:
+                # Remove "pending removal" ACL rules
+                del self.acl_rule[key]
+                ps = swsscommon.ProducerStateTable(self.appl_db, APP_ACL_RULE_TABLE_NAME)
+                ps._del(key)
+                logger.log_info("Remove time-based ACL rule from APPL_DB: {}".format(key))
+            elif self.acl_rule[key] == 1:
+                # Change "active" ACL rules to "pending removal" status
+                self.acl_rule[key] = 0
+                logger.log_info("Pending removal time-based ACL rule from APPL_DB: {}".format(key))
+
+
+    def stop_working(self):
+        """
+        Stop main loop.
+        """
+        self.working = False
+        logger.log_info("Time-based ACL manager is going to quit")
+
+# ============================= Functions =============================
+
+
+def sig_term_handler(signal, frame):
+    """
+    A signal handler to ensure the working is shutdown gracefully
+    """
+    global time_based_acl_checker
+    if time_based_acl_checker:
+        time_based_acl_checker.stop_working()
+
+
+def main():
+    signal.signal(signal.SIGTERM, sig_term_handler)
+    
+    # Start working
+    global time_based_acl_checker
+    time_based_acl_checker = TimeBasedACLChecker()
+    time_based_acl_checker.start_working()
+
+
+if __name__ == "__main__":
+    main()

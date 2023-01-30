@@ -2,22 +2,30 @@
 
 import time
 import signal
+from enum import Enum, unique
 from swsscommon import swsscommon
 from sonic_py_common.logger import Logger 
 
-SYSLOG_IDENTIFIER = 'time_based_acl_mgrd'
+SYSLOG_IDENTIFIER = 'non_persistent_acl_mgrd'
 APP_ACL_RULE_TABLE_NAME = "ACL_RULE_TABLE"
+STATE_NON_PERSISTENT_ACL_RULE_TABLE_NAME = "NON_PERSISTENT_ACL_RULE_TABLE"
 
-time_based_acl_checker = None
+non_persistent_acl_checker = None
 
 logger = Logger(SYSLOG_IDENTIFIER)
 logger.set_min_log_priority_info()
 
-class TimeBasedACLChecker(object):
+@unique
+class ACLRuleStatus(Enum):
+    REMOVE_PENDING = 0
+    ACTIVE = 1
+
+
+class NonPersistentACLChecker(object):
     """
     Class which subscribes notification of changes in ACL rule table of APP DB.
     The state machine of an ACL rule is:
-    |Active| - 180s by default -> |Active but pending removal| - 180s by default -> |Removed|
+    |Active| - 180s by default -> |Active but Remove pending| - 180s by default -> |Removed|
         |                                                              |
         \<-------------------------------------------------------------/
                              SET op
@@ -27,6 +35,9 @@ class TimeBasedACLChecker(object):
     def __init__(self, interval_in_second=180):
         # Open a handle to the Application database
         self.appl_db = swsscommon.DBConnector("APPL_DB", 0, False)
+
+        # Open a handle to the State database
+        self.state_db = swsscommon.DBConnector("STATE_DB", 0, False)
         
         # By default, the program will check ACL rule every 180s
         self.interval_in_second = interval_in_second
@@ -38,7 +49,7 @@ class TimeBasedACLChecker(object):
         Main loop for checking ACL rules
         """
         self.working = True
-        logger.log_info("Time-based ACL manager starts working")
+        logger.log_info("Non-persistent ACL manager starts working")
 
         # Set select timeout to 5 seconds
         SELECT_TIMEOUT_MS = 1000 * 5
@@ -61,10 +72,18 @@ class TimeBasedACLChecker(object):
                 else:
                     self.log_error("Got unexpected selectable object")
 
-            # By default, 
             if int(time.time()) - last_flush > self.interval_in_second:
                 self.process_acl_rule_flush()
                 last_flush = int(time.time())
+
+
+    def get_acl_rule_status_string(self, value):
+        if value == ACLRuleStatus.REMOVE_PENDING:
+            return "REMOVE_PENDING"
+        elif value == ACLRuleStatus.ACTIVE:
+            return "ACTIVE"
+        else:
+            return "UNKNOWN"
 
 
     def process_acl_rule_table_event(self, key, op, fvp):
@@ -73,26 +92,43 @@ class TimeBasedACLChecker(object):
         """
         logger.log_info('Process APP DB ACL rule table event: {} {} {}'.format(key,op,fvp))
 
-        # 1 = Active, 0 = Pending removal
-        self.acl_rule[key] = 1
+        # 1 = Active, 0 = Remove pending
+        self.acl_rule[key] = ACLRuleStatus.ACTIVE
+
+        # Save above status to STATE DB
+        ps = swsscommon.ProducerStateTable(self.state_db, STATE_NON_PERSISTENT_ACL_RULE_TABLE_NAME)
+        fvs = swsscommon.FieldValuePairs([('Status', self.get_acl_rule_status_string(ACLRuleStatus.ACTIVE))])
+        ps.set(key, fvs)
 
 
     def process_acl_rule_flush(self):
         """
-        Flush APP DB "pending removal" ACL rules
-        Change "active" ACL rules to "pending removal" status.
+        Flush APP DB "Remove pending" ACL rules
+        Change "active" ACL rules to "Remove pending" status.
         """
         for key in list(self.acl_rule):
-            if self.acl_rule[key] == 0:
-                # Remove "pending removal" ACL rules
+            if self.acl_rule[key] == ACLRuleStatus.REMOVE_PENDING:
+                # Remove "Remove_pending" ACL rules in APP DB
                 del self.acl_rule[key]
                 ps = swsscommon.ProducerStateTable(self.appl_db, APP_ACL_RULE_TABLE_NAME)
                 ps._del(key)
-                logger.log_info("Remove time-based ACL rule from APPL_DB: {}".format(key))
-            elif self.acl_rule[key] == 1:
-                # Change "active" ACL rules to "pending removal" status
-                self.acl_rule[key] = 0
-                logger.log_info("Pending removal time-based ACL rule from APPL_DB: {}".format(key))
+
+                # Remove status in STATE DB
+                ps = swsscommon.ProducerStateTable(self.state_db, STATE_NON_PERSISTENT_ACL_RULE_TABLE_NAME)
+                ps._del(key)
+
+                logger.log_info("Remove non-persistent ACL from APPL_DB: {}".format(key))
+            elif self.acl_rule[key] == ACLRuleStatus.ACTIVE:
+                # Change "Active" ACL rules to "Remove pending" status
+                self.acl_rule[key] = ACLRuleStatus.REMOVE_PENDING
+
+                # Change status in STATE DB
+                ps = swsscommon.ProducerStateTable(self.state_db, STATE_NON_PERSISTENT_ACL_RULE_TABLE_NAME)
+                fvs = swsscommon.FieldValuePairs([('Status', 
+                                        self.get_acl_rule_status_string(ACLRuleStatus.REMOVE_PENDING))])
+                ps.set(key, fvs)
+
+                logger.log_info("Set to remove-pending for non-persistent ACL in APPL_DB: {}".format(key))
 
 
     def stop_working(self):
@@ -100,7 +136,7 @@ class TimeBasedACLChecker(object):
         Stop main loop.
         """
         self.working = False
-        logger.log_info("Time-based ACL manager is going to quit")
+        logger.log_info("Non-persistent ACL manager is going to quit")
 
 # ============================= Functions =============================
 
@@ -109,18 +145,18 @@ def sig_term_handler(signal, frame):
     """
     A signal handler to ensure the working is shutdown gracefully
     """
-    global time_based_acl_checker
-    if time_based_acl_checker:
-        time_based_acl_checker.stop_working()
+    global non_persistent_acl_checker
+    if non_persistent_acl_checker:
+        non_persistent_acl_checker.stop_working()
 
 
 def main():
     signal.signal(signal.SIGTERM, sig_term_handler)
     
     # Start working
-    global time_based_acl_checker
-    time_based_acl_checker = TimeBasedACLChecker()
-    time_based_acl_checker.start_working()
+    global non_persistent_acl_checker
+    non_persistent_acl_checker = NonPersistentACLChecker()
+    non_persistent_acl_checker.start_working()
 
 
 if __name__ == "__main__":

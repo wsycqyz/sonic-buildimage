@@ -256,3 +256,6 @@ USER root
 WORKDIR /azp
 COPY ./start.sh .
 RUN chmod +x start.sh
+
+USER $user
+WORKDIR /var/$user

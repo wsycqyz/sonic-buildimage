@@ -38,10 +38,6 @@ RUN apt-get update && apt-get install -y apt-transport-https \
                                          telnet \
                                          vim
 
-RUN curl -fsSL https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py \
-    && python2 get-pip.py \
-    && rm -f get-pip.py
-
 RUN python3 -m pip install --upgrade pip setuptools wheel
 RUN python3 -m pip install aiohttp \
                            allure-pytest==2.8.22 \
@@ -115,6 +111,10 @@ RUN python3 -m pip install aiohttp \
     && rm -fr nanomsg-1.2  \
     && rm -f 1.2.tar.gz    \
     && python3 -m pip install nnpy
+
+RUN curl -fsSL https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py \
+    && python2 get-pip.py \
+    && rm -f get-pip.py
 
 RUN python2 -m pip install --upgrade pip setuptools wheel
 RUN python2 -m pip install allure-pytest==2.8.22 \

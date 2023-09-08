@@ -41,7 +41,7 @@ RUN apt-get update && apt-get install -y apt-transport-https \
 RUN python3 -m pip install --upgrade pip setuptools wheel
 RUN python3 -m pip install aiohttp \
                            allure-pytest==2.8.22 \
-                           ansible==2.9.27 \
+                           ansible==6.7.0 \
                            azure-storage-blob==12.9.0 \
                            azure-kusto-data \
                            azure-kusto-ingest \
@@ -57,7 +57,7 @@ RUN python3 -m pip install aiohttp \
                            ipython==8.12.2 \
                            ixnetwork-restpy==1.0.64 \
                            ixnetwork-open-traffic-generator==0.0.79 \
-                           jinja2==2.10.1 \
+                           jinja2==3.1.2 \
                            jsonpatch \
                            lxml \
                            markupsafe==2.0.1 \
@@ -80,12 +80,12 @@ RUN python3 -m pip install aiohttp \
                            pyro4 \
                            pysnmp==4.4.12 \
                            pysubnettree \
-                           pytest-ansible \
+                           pytest-ansible==4.0.0 \
                            pytest-html \
                            pytest-repeat \
                            pytest-xdist==1.28.0 \
                            python-dateutil \
-                           pytest==7.1.3 \
+                           pytest==7.4.0 \
                            redis \
                            requests \
                            retry \

@@ -340,15 +340,14 @@ ENV PATH="$BACKUP_OF_PATH"
 
 USER root
 WORKDIR /azp
-COPY ./start.sh .
-RUN chmod +x start.sh
-
-# Install python3 as default python
-RUN ln -sf /usr/bin/python3 /usr/bin/python \
-    && ln -sf `which pip3` /usr/bin/pip
-
-COPY 0001-Fix-getattr-AttributeError-in-multi-thread-scenario.patch /tmp/
-RUN patch -u -b /usr/local/lib/python3.8/dist-packages/ansible/plugins/loader.py -i /tmp/0001-Fix-getattr-AttributeError-in-multi-thread-scenario.patch
+COPY start.sh \
+     0001-Fix-getattr-AttributeError-in-multi-thread-scenario.patch \
+     ./ 
+RUN chmod +x start.sh \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
+    && ln -sf `which pip3` /usr/bin/pip \
+    && ln -sf `which pip3` /usr/local/sbin/pip \
+    && patch -u -b /usr/local/lib/python3.8/dist-packages/ansible/plugins/loader.py -i /azp/0001-Fix-getattr-AttributeError-in-multi-thread-scenario.patch
 
 USER $user
 WORKDIR /var/$user

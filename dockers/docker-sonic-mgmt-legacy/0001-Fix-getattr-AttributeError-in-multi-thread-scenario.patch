@@ -1,0 +1,1 @@
+../docker-sonic-mgmt/0001-Fix-getattr-AttributeError-in-multi-thread-scenario.patch

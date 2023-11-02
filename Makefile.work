@@ -578,7 +578,7 @@ SONIC_BUILD_INSTRUCTION :=  $(MAKE) \
                            PIP_HTTP_TIMEOUT=$(PIP_HTTP_TIMEOUT) \
                            LEGACY_SONIC_MGMT_DOCKER=$(LEGACY_SONIC_MGMT_DOCKER) \
                            $(SONIC_OVERRIDE_BUILD_VARS)
-						   
+
 .PHONY: sonic-slave-build sonic-slave-bash init reset
 
 

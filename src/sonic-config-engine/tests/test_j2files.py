@@ -319,9 +319,9 @@ class TestJ2Files(TestCase):
         self._test_ipinip_t1_render_template(extra_data, 'ipinip_cisco_t1_subnet_decap_enable.json')
 
     def test_ipinip_cisco_t1_smartswitch(self):
-        # Cisco SmartSwitch T1 - ttl_mode stays pipe.
+        # Cisco SmartSwitch T1 - SmartSwitch is not excluded, so ttl_mode is uniform too.
         extra_data = {"ASIC_VENDOR": "cisco-8000", "DEVICE_METADATA": {"localhost": {"subtype": "SmartSwitch"}}}
-        self._test_ipinip_t1_render_template(extra_data, 'ipinip_t1.json')
+        self._test_ipinip_t1_render_template(extra_data, 'ipinip_cisco_t1.json')
 
     def test_ipinip_cisco_backend_leaf(self):
         # Cisco BackEndLeafRouter - the type must be exactly LeafRouter, so ttl_mode stays pipe.

@@ -21,7 +21,7 @@
 {% endif -%}
 
 {% set is_cisco_t1 = false %}
-{% if is_cisco and DEVICE_METADATA['localhost']['type'] == 'LeafRouter' and DEVICE_METADATA['localhost']['subtype'] != 'SmartSwitch' %}
+{% if is_cisco and DEVICE_METADATA['localhost']['type'] == 'LeafRouter' %}
     {%- set is_cisco_t1 = true %}
 {% endif -%}
 
